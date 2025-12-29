@@ -101,39 +101,6 @@ def create_map(df_map, df_gateways):
     
     return m
 
-def create_legend_html(df_legend):
-    """Create legend as standalone HTML component"""
-    items = ""
-    for _, row in df_legend.iterrows():
-        items += f"""
-        <div style="display:flex;align-items:flex-start;padding:5px 8px;border-bottom:1px solid #F0F0F0;gap:8px;">
-            <div style="background:linear-gradient(135deg,#00B0F0,#0090C8);color:white;font-weight:700;min-width:26px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:12px;flex-shrink:0;">{row["ID"]}</div>
-            <div style="font-size:11px;color:#374151;line-height:1.35;">{row["Description"]}</div>
-        </div>"""
-    
-    html = f"""
-    <html>
-    <head>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-        <style>
-            * {{ font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }}
-            body {{ background: transparent; }}
-        </style>
-    </head>
-    <body>
-        <div style="background:#FEF2F2;border:2px solid #DC2626;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
-            <div style="width:26px;height:26px;border:3px solid #DC2626;border-radius:50%;flex-shrink:0;"></div>
-            <div style="font-size:12px;color:#1F2937;"><strong style="color:#B91C1C;">UPS Origin Gateways</strong><br><span style="font-size:11px;color:#6B7280;">CGN, VIE, BER, BCN</span></div>
-        </div>
-        <div style="font-weight:600;color:#1B4F72;font-size:13px;margin-bottom:8px;">📍 Manufacturing Sites</div>
-        <div style="background:white;border:1px solid #E5E8EB;border-radius:8px;max-height:420px;overflow-y:auto;">
-            {items}
-        </div>
-    </body>
-    </html>
-    """
-    return html
-
 def main():
     st.markdown('''
     <div class="exec-header">
@@ -175,9 +142,39 @@ def main():
         st_folium(m, width=None, height=480, returned_objects=[])
     
     with col_legend:
-        # Use components.html for reliable rendering
-        legend_html = create_legend_html(df_legend)
-        components.html(legend_html, height=550, scrolling=True)
+        # Build legend HTML as a complete standalone page
+        items_html = ""
+        for _, row in df_legend.iterrows():
+            items_html += f'''<div style="display:flex;align-items:flex-start;padding:4px 6px;border-bottom:1px solid #F0F0F0;gap:6px;">
+                <div style="background:linear-gradient(135deg,#00B0F0,#0090C8);color:white;font-weight:700;min-width:24px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:3px;font-size:11px;flex-shrink:0;">{row["ID"]}</div>
+                <div style="font-size:10.5px;color:#374151;line-height:1.3;">{row["Description"]}</div>
+            </div>'''
+        
+        legend_html = f'''<!DOCTYPE html>
+<html>
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {{ font-family: 'Inter', -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ background: transparent; }}
+        ::-webkit-scrollbar {{ width: 6px; }}
+        ::-webkit-scrollbar-track {{ background: #f1f1f1; border-radius: 3px; }}
+        ::-webkit-scrollbar-thumb {{ background: #c1c1c1; border-radius: 3px; }}
+    </style>
+</head>
+<body>
+    <div style="background:#FEF2F2;border:2px solid #DC2626;border-radius:6px;padding:8px 10px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+        <div style="width:24px;height:24px;border:3px solid #DC2626;border-radius:50%;flex-shrink:0;"></div>
+        <div style="font-size:11px;color:#1F2937;"><strong style="color:#B91C1C;">UPS Origin Gateways</strong><br><span style="font-size:10px;color:#6B7280;">CGN, VIE, BER, BCN</span></div>
+    </div>
+    <div style="font-weight:600;color:#1B4F72;font-size:12px;margin-bottom:6px;">📍 Manufacturing Sites</div>
+    <div style="background:white;border:1px solid #E5E8EB;border-radius:6px;max-height:400px;overflow-y:auto;">
+        {items_html}
+    </div>
+</body>
+</html>'''
+        
+        components.html(legend_html, height=520, scrolling=False)
     
     st.markdown("---")
     

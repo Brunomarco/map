@@ -1,15 +1,12 @@
 """
 Nuclear Medicine EMEA Manufacturing & Origins Dashboard
-Professional executive dashboard for nuclear medicine supply chain visualization
+Professional MBB-style executive dashboard
 """
 
 import streamlit as st
 import pandas as pd
 import folium
-from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
-import plotly.express as px
-import plotly.graph_objects as go
 from pathlib import Path
 
 # =============================================================================
@@ -19,588 +16,385 @@ st.set_page_config(
     page_title="NM Origins & Manufacturers | EMEA",
     page_icon="🔬",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # =============================================================================
-# CUSTOM CSS - MBB PROFESSIONAL STYLE
+# PROFESSIONAL MBB STYLING
 # =============================================================================
 st.markdown("""
 <style>
-    /* Main background and fonts */
     .stApp {
-        background-color: #FAFAFA;
+        background-color: #FFFFFF;
     }
     
-    /* Header styling */
     .main-header {
-        background: linear-gradient(135deg, #1B4F72 0%, #2E86AB 50%, #28B463 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 0 0 12px 12px;
-        margin: -1rem -1rem 2rem -1rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    
-    .main-header h1 {
-        color: white;
-        font-family: 'Verdana', 'Segoe UI', sans-serif;
-        font-weight: 600;
-        font-size: 1.8rem;
-        margin: 0;
-        letter-spacing: 0.5px;
-    }
-    
-    .main-header p {
-        color: rgba(255,255,255,0.9);
-        font-size: 0.95rem;
-        margin: 0.5rem 0 0 0;
-    }
-    
-    /* Card styling */
-    .metric-card {
-        background: white;
-        border-radius: 10px;
-        padding: 1.2rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        border-left: 4px solid #1B4F72;
-        margin-bottom: 1rem;
-    }
-    
-    .metric-card h3 {
-        color: #1B4F72;
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin: 0 0 0.5rem 0;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .metric-card .value {
-        color: #2C3E50;
-        font-size: 2rem;
-        font-weight: 700;
-    }
-    
-    /* Legend styling */
-    .legend-container {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .legend-item {
+        background: linear-gradient(135deg, #1a5f4a 0%, #2d8f6f 40%, #1B4F72 100%);
+        padding: 1rem 2rem;
+        margin: -1rem -1rem 1.5rem -1rem;
         display: flex;
         align-items: center;
-        padding: 0.4rem 0;
-        font-size: 0.85rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     
-    .legend-dot {
-        width: 12px;
-        height: 12px;
+    .header-title {
+        color: white;
+        font-family: 'Verdana', 'Arial', sans-serif;
+        font-weight: 600;
+        font-size: 1.6rem;
+        margin: 0;
+        margin-left: 15px;
+    }
+    
+    .legend-row {
+        display: flex;
+        align-items: flex-start;
+        padding: 8px 12px;
+        border-bottom: 1px solid #EEEEEE;
+        font-size: 0.78rem;
+        line-height: 1.4;
+    }
+    
+    .legend-row:nth-child(even) {
+        background: #F8F9FA;
+    }
+    
+    .legend-id {
+        background: #00B0F0;
+        color: white;
+        font-weight: bold;
+        min-width: 26px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 3px;
+        margin-right: 12px;
+        font-size: 0.75rem;
+        flex-shrink: 0;
+        border: 1px solid #0088CC;
+    }
+    
+    .legend-content {
+        flex: 1;
+        color: #2C3E50;
+    }
+    
+    .legend-facility {
+        font-weight: 600;
+        color: #1B4F72;
+    }
+    
+    .legend-isotope {
+        color: #C0392B;
+        font-size: 0.72rem;
+    }
+    
+    .ups-legend {
+        display: flex;
+        align-items: center;
+        padding: 12px 15px;
+        background: #FFF5F5;
+        border: 2px solid #FF6B6B;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+    
+    .ups-circle {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #FF0000;
         border-radius: 50%;
-        margin-right: 10px;
-        border: 2px solid white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        margin-right: 15px;
+        flex-shrink: 0;
     }
     
-    /* Sidebar styling */
-    section[data-testid="stSidebar"] {
-        background-color: #F8F9FA;
-        border-right: 1px solid #E5E5E5;
-    }
-    
-    section[data-testid="stSidebar"] .stSelectbox label,
-    section[data-testid="stSidebar"] .stMultiSelect label {
-        color: #1B4F72;
-        font-weight: 600;
-        font-size: 0.9rem;
-    }
-    
-    /* Table styling */
-    .dataframe {
-        font-size: 0.85rem !important;
-    }
-    
-    /* Section headers */
-    .section-header {
-        color: #1B4F72;
-        font-size: 1.1rem;
-        font-weight: 600;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid #28B463;
-        margin-bottom: 1rem;
-    }
-    
-    /* Info boxes */
-    .info-box {
-        background: linear-gradient(135deg, #E8F6F3 0%, #EBF5FB 100%);
-        border-radius: 8px;
-        padding: 1rem;
-        border-left: 4px solid #28B463;
-        margin: 1rem 0;
-    }
-    
-    /* Footer */
-    .footer {
-        text-align: center;
-        color: #7F8C8D;
+    .ups-text {
         font-size: 0.8rem;
-        padding: 1rem;
-        border-top: 1px solid #E5E5E5;
-        margin-top: 2rem;
+        color: #333;
+        line-height: 1.4;
     }
     
-    /* Hide Streamlit branding */
+    .metric-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+    
+    .metric-card {
+        background: white;
+        border: 1px solid #E0E0E0;
+        border-radius: 8px;
+        padding: 15px 20px;
+        flex: 1;
+        text-align: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1B4F72;
+    }
+    
+    .metric-label {
+        font-size: 0.7rem;
+        color: #7F8C8D;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 3px;
+    }
+    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    .stDeployButton {display: none;}
     
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #F8F9FA;
-        border-radius: 8px;
+    .legend-scroll {
+        max-height: 480px;
+        overflow-y: auto;
+        border: 1px solid #E0E0E0;
+        border-radius: 6px;
+        background: white;
+    }
+    
+    .section-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #1B4F72;
+        margin-bottom: 12px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #28B463;
+    }
+    
+    .footer-text {
+        text-align: center;
+        color: #95A5A6;
+        font-size: 0.75rem;
+        padding: 20px;
+        border-top: 1px solid #EEEEEE;
+        margin-top: 25px;
+    }
+    
+    .upload-section {
+        background: #F0F7FF;
+        border: 2px dashed #3498DB;
+        border-radius: 10px;
+        padding: 30px;
+        text-align: center;
+        margin: 30px auto;
+        max-width: 500px;
+    }
+    
+    .info-box {
+        background: #FFF9E6;
+        border-left: 4px solid #F39C12;
+        padding: 12px 15px;
+        margin-top: 15px;
+        font-size: 0.8rem;
+        border-radius: 0 6px 6px 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# DATA LOADING FUNCTION
+# DATA LOADING
 # =============================================================================
 @st.cache_data
 def load_data(uploaded_file=None):
-    """Load manufacturer data from Excel file"""
-    if uploaded_file is not None:
-        df_manufacturers = pd.read_excel(uploaded_file, sheet_name="Manufacturers")
-        df_gateways = pd.read_excel(uploaded_file, sheet_name="UPS_Gateways")
-        df_isotopes = pd.read_excel(uploaded_file, sheet_name="Isotopes_Reference")
-    else:
-        # Try to load from default location
-        default_path = Path(__file__).parent / "nm_manufacturers_data.xlsx"
-        if default_path.exists():
-            df_manufacturers = pd.read_excel(default_path, sheet_name="Manufacturers")
-            df_gateways = pd.read_excel(default_path, sheet_name="UPS_Gateways")
-            df_isotopes = pd.read_excel(default_path, sheet_name="Isotopes_Reference")
+    try:
+        if uploaded_file is not None:
+            df_map = pd.read_excel(uploaded_file, sheet_name="Manufacturers")
+            df_legend = pd.read_excel(uploaded_file, sheet_name="Legend")
+            df_gateways = pd.read_excel(uploaded_file, sheet_name="UPS_Gateways")
         else:
-            st.error("Please upload the data file (nm_manufacturers_data.xlsx)")
-            return None, None, None
-    
-    return df_manufacturers, df_gateways, df_isotopes
+            default_path = Path(__file__).parent / "nm_manufacturers_data.xlsx"
+            if default_path.exists():
+                df_map = pd.read_excel(default_path, sheet_name="Manufacturers")
+                df_legend = pd.read_excel(default_path, sheet_name="Legend")
+                df_gateways = pd.read_excel(default_path, sheet_name="UPS_Gateways")
+            else:
+                return None, None, None
+        return df_map, df_legend, df_gateways
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return None, None, None
 
 # =============================================================================
-# MAP CREATION FUNCTION
+# MAP CREATION
 # =============================================================================
-def create_map(df_manufacturers, df_gateways, selected_countries, selected_types, selected_isotopes):
-    """Create interactive Folium map with markers"""
-    
-    # Filter data based on selections
-    df_filtered = df_manufacturers.copy()
-    
-    if selected_countries and "All" not in selected_countries:
-        df_filtered = df_filtered[df_filtered["Country"].isin(selected_countries)]
-    
-    if selected_types and "All" not in selected_types:
-        df_filtered = df_filtered[df_filtered["Facility Type"].isin(selected_types)]
-    
-    if selected_isotopes and "All" not in selected_isotopes:
-        # Filter by isotopes (check if any selected isotope is in the Isotopes column)
-        mask = df_filtered["Isotopes"].apply(
-            lambda x: any(iso in str(x) for iso in selected_isotopes)
-        )
-        df_filtered = df_filtered[mask]
-    
-    # Create base map centered on Europe
+def create_map(df_map, df_gateways):
     m = folium.Map(
         location=[50.0, 10.0],
         zoom_start=4,
         tiles=None,
-        control_scale=True
+        control_scale=False
     )
     
-    # Add clean tile layer
     folium.TileLayer(
         tiles='cartodbpositron',
-        name='Light Map',
-        control=False
+        name='Map',
+        control=False,
+        opacity=0.95
     ).add_to(m)
     
-    # Color mapping for facility types
-    type_colors = {
-        "Research Reactor": "#E74C3C",           # Red
-        "Radiopharmaceutical Producer": "#3498DB", # Blue
-        "Therapeutic Producer": "#9B59B6",        # Purple
-        "PET Producer": "#F39C12",                # Orange
-        "Alpha Therapy Producer": "#C0392B",      # Dark Red
-        "Cyclotron": "#27AE60",                   # Green
-        "Generator Producer": "#1ABC9C",          # Teal
-        "Research Institute": "#E67E22",          # Dark Orange
-        "Accelerator-based": "#16A085"            # Dark Teal
-    }
-    
-    # Add manufacturer markers
-    for idx, row in df_filtered.iterrows():
-        facility_type = row["Facility Type"]
-        color = type_colors.get(facility_type, "#34495E")
-        
-        # Create popup content
-        popup_html = f"""
-        <div style="font-family: 'Segoe UI', sans-serif; width: 280px;">
-            <div style="background: linear-gradient(135deg, #1B4F72, #2E86AB); color: white; 
-                        padding: 10px; border-radius: 8px 8px 0 0; margin: -13px -20px 10px -20px;">
-                <h4 style="margin: 0; font-size: 14px;">{row['Facility Name']}</h4>
-                <p style="margin: 5px 0 0 0; font-size: 11px; opacity: 0.9;">
-                    <b>ID {row['ID']}</b> • {row['Country']}
-                </p>
-            </div>
-            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 4px 0; color: #7F8C8D;"><b>Location</b></td>
-                    <td style="padding: 4px 0;">{row['City/Region']}, {row['Country']}</td>
-                </tr>
-                <tr style="background: #F8F9FA;">
-                    <td style="padding: 4px 0; color: #7F8C8D;"><b>Type</b></td>
-                    <td style="padding: 4px 0;">{row['Facility Type']}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 4px 0; color: #7F8C8D;"><b>Isotopes</b></td>
-                    <td style="padding: 4px 0; color: #E74C3C; font-weight: 600;">{row['Isotopes']}</td>
-                </tr>
-                <tr style="background: #F8F9FA;">
-                    <td style="padding: 4px 0; color: #7F8C8D;"><b>Half-Lives</b></td>
-                    <td style="padding: 4px 0;">{row['Half-Lives']}</td>
-                </tr>
-            </table>
-            <p style="font-size: 10px; color: #95A5A6; margin-top: 10px; font-style: italic;">
-                {row['Notes'] if pd.notna(row['Notes']) else ''}
-            </p>
-        </div>
-        """
-        
-        folium.CircleMarker(
+    # UPS Gateway circles (large red circles)
+    for _, row in df_gateways.iterrows():
+        folium.Circle(
             location=[row["Latitude"], row["Longitude"]],
-            radius=10,
-            popup=folium.Popup(popup_html, max_width=320),
-            tooltip=f"<b>{row['Facility Name']}</b><br>{row['Country']}",
-            color="#FFFFFF",
-            weight=2,
-            fill=True,
-            fillColor=color,
-            fillOpacity=0.85
+            radius=75000,
+            color='#FF0000',
+            weight=3,
+            fill=False,
+            opacity=0.85,
+            tooltip=f"<b>UPS Gateway: {row['Code']}</b><br>{row['City']}, {row['Country']}<br>Status: {row['Status']}"
         ).add_to(m)
-        
-        # Add ID label
+    
+    # Manufacturer markers (blue numbered boxes)
+    for _, row in df_map.iterrows():
         folium.Marker(
             location=[row["Latitude"], row["Longitude"]],
             icon=folium.DivIcon(
-                html=f"""
+                html=f'''
                 <div style="
                     background: #00B0F0;
                     color: white;
                     font-weight: bold;
-                    font-size: 10px;
-                    width: 18px;
-                    height: 18px;
-                    border-radius: 3px;
+                    font-size: 11px;
+                    font-family: Arial, sans-serif;
+                    width: 24px;
+                    height: 22px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    border: 1px solid white;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                    transform: translate(-9px, -25px);
+                    border: 2px solid #0088CC;
+                    border-radius: 3px;
+                    box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                    transform: translate(-12px, -11px);
                 ">{row['ID']}</div>
-                """,
-                icon_size=(18, 18)
-            )
+                ''',
+                icon_size=(24, 22)
+            ),
+            tooltip=f"<b>Site {row['ID']}</b>: {row['Facility_Group']}<br>{row['Country']}"
         ).add_to(m)
     
-    # Add UPS Gateway markers (red circles as in original)
-    for idx, row in df_gateways.iterrows():
-        gateway_color = "#FF0000" if row["Status"] == "Current" else "#FF6B6B"
-        
-        popup_html = f"""
-        <div style="font-family: 'Segoe UI', sans-serif; width: 200px;">
-            <div style="background: #FF0000; color: white; padding: 8px; 
-                        border-radius: 8px 8px 0 0; margin: -13px -20px 10px -20px;">
-                <h4 style="margin: 0; font-size: 13px;">UPS Gateway: {row['Code']}</h4>
-            </div>
-            <p style="margin: 5px 0; font-size: 12px;">
-                <b>City:</b> {row['City']}<br>
-                <b>Country:</b> {row['Country']}<br>
-                <b>Status:</b> <span style="color: {'#27AE60' if row['Status'] == 'Current' else '#F39C12'};">
-                    {row['Status']}</span>
-            </p>
-        </div>
-        """
-        
-        # Large red circle (like in original PowerPoint)
-        folium.Circle(
-            location=[row["Latitude"], row["Longitude"]],
-            radius=40000,  # 40km radius
-            popup=folium.Popup(popup_html, max_width=220),
-            tooltip=f"<b>UPS Gateway: {row['Code']}</b><br>{row['City']} ({row['Status']})",
-            color=gateway_color,
-            weight=3,
-            fill=False,
-            opacity=0.8
-        ).add_to(m)
-    
-    return m, df_filtered
+    return m
 
 # =============================================================================
 # MAIN APPLICATION
 # =============================================================================
 def main():
     # Header
-    st.markdown("""
+    st.markdown('''
     <div class="main-header">
-        <h1>🔬 NM Origins and Manufacturers</h1>
-        <p>Advanced Therapies Nuclear Medicine Manufacturing and UPS Origin Locations • EMEA Region</p>
+        <svg width="45" height="45" viewBox="0 0 100 100">
+            <polygon points="50,5 95,30 95,75 50,95 5,75 5,30" fill="#28B463" opacity="0.9"/>
+            <polygon points="50,15 85,35 85,70 50,85 15,70 15,35" fill="#1a5f4a"/>
+            <polygon points="50,25 75,40 75,65 50,75 25,65 25,40" fill="#2d8f6f"/>
+        </svg>
+        <h1 class="header-title">NM Origins and Manufacturers</h1>
     </div>
-    """, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
     
-    # Sidebar
-    with st.sidebar:
-        st.markdown("### 📂 Data Source")
+    # File upload
+    with st.expander("📂 Data Source", expanded=False):
         uploaded_file = st.file_uploader(
-            "Upload Excel data file",
+            "Upload nm_manufacturers_data.xlsx",
             type=["xlsx"],
-            help="Upload the nm_manufacturers_data.xlsx file"
+            help="Upload the Excel data file to display the dashboard"
         )
-        
-        # Load data
-        df_manufacturers, df_gateways, df_isotopes = load_data(uploaded_file)
-        
-        if df_manufacturers is None:
-            st.warning("⚠️ Please upload the data file to continue")
-            st.markdown("""
-            **Expected file:** `nm_manufacturers_data.xlsx`
-            
-            The file should contain sheets:
-            - Manufacturers
-            - UPS_Gateways
-            - Isotopes_Reference
-            """)
-            return
-        
-        st.success(f"✅ Loaded {len(df_manufacturers)} facilities")
-        
-        st.markdown("---")
-        st.markdown("### 🎛️ Filters")
-        
-        # Country filter
-        countries = ["All"] + sorted(df_manufacturers["Country"].unique().tolist())
-        selected_countries = st.multiselect(
-            "Country",
-            options=countries,
-            default=["All"],
-            help="Filter facilities by country"
-        )
-        
-        # Facility type filter
-        types = ["All"] + sorted(df_manufacturers["Facility Type"].unique().tolist())
-        selected_types = st.multiselect(
-            "Facility Type",
-            options=types,
-            default=["All"],
-            help="Filter by facility type"
-        )
-        
-        # Isotope filter
-        all_isotopes = set()
-        for isotopes in df_manufacturers["Isotopes"].dropna():
-            for iso in str(isotopes).replace(";", ",").split(","):
-                iso_clean = iso.strip().split()[0]  # Get just the isotope name
-                if iso_clean and len(iso_clean) > 1:
-                    all_isotopes.add(iso_clean)
-        
-        isotopes_list = ["All"] + sorted(list(all_isotopes))
-        selected_isotopes = st.multiselect(
-            "Isotope",
-            options=isotopes_list,
-            default=["All"],
-            help="Filter by isotope produced"
-        )
-        
-        st.markdown("---")
-        st.markdown("### 📊 Legend")
-        
-        # Facility type legend
-        st.markdown("**Facility Types**")
-        type_colors = {
-            "Research Reactor": "#E74C3C",
-            "Radiopharmaceutical Producer": "#3498DB",
-            "Therapeutic Producer": "#9B59B6",
-            "PET Producer": "#F39C12",
-            "Alpha Therapy Producer": "#C0392B",
-            "Cyclotron": "#27AE60",
-            "Generator Producer": "#1ABC9C",
-            "Research Institute": "#E67E22",
-            "Accelerator-based": "#16A085"
-        }
-        
-        for ftype, color in type_colors.items():
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-dot" style="background-color: {color};"></div>
-                <span>{ftype}</span>
+    
+    df_map, df_legend, df_gateways = load_data(uploaded_file)
+    
+    if df_map is None:
+        st.markdown('''
+        <div class="upload-section">
+            <h3 style="color: #1B4F72;">📂 Please upload the data file</h3>
+            <p style="color: #666;">Upload <code>nm_manufacturers_data.xlsx</code> using the Data Source section above</p>
+        </div>
+        ''', unsafe_allow_html=True)
+        return
+    
+    # Layout: Map (left) + Legend (right)
+    col_map, col_legend = st.columns([2.2, 1])
+    
+    with col_map:
+        st.markdown('''
+        <div class="metric-row">
+            <div class="metric-card">
+                <div class="metric-value">18</div>
+                <div class="metric-label">Production Sites</div>
             </div>
-            """, unsafe_allow_html=True)
+            <div class="metric-card">
+                <div class="metric-value">14</div>
+                <div class="metric-label">Countries</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">4</div>
+                <div class="metric-label">UPS Gateways</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">12+</div>
+                <div class="metric-label">Isotopes</div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
         
-        st.markdown("---")
-        st.markdown("**UPS Gateways**")
-        st.markdown("""
-        <div class="legend-item">
-            <div style="width: 20px; height: 20px; border: 3px solid #FF0000; 
-                        border-radius: 50%; margin-right: 10px;"></div>
-            <span>UPS Origin Gateway</span>
+        m = create_map(df_map, df_gateways)
+        st_folium(m, width=None, height=530, returned_objects=[])
+    
+    with col_legend:
+        st.markdown('''
+        <div class="ups-legend">
+            <div class="ups-circle"></div>
+            <div class="ups-text">
+                <b>UPS Origin Gateways</b><br>
+                <span style="font-size: 0.75rem;">(Current and proposed – CGN, VIE, BER, BCN)</span>
+            </div>
         </div>
-        """, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
+        
+        legend_html = '<div class="legend-scroll">'
+        for _, row in df_legend.iterrows():
+            legend_html += f'''
+            <div class="legend-row">
+                <div class="legend-id">{row['ID']}</div>
+                <div class="legend-content">
+                    <span class="legend-facility">{row['Facilities']}</span><br>
+                    <span class="legend-isotope">{row['Isotopes']}</span><br>
+                    <span style="color: #666; font-size: 0.68rem;">{row['Half_Lives']}</span>
+                </div>
+            </div>
+            '''
+        legend_html += '</div>'
+        st.markdown(legend_html, unsafe_allow_html=True)
     
-    # Main content area
-    # Metrics row
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>Total Facilities</h3>
-            <div class="value">{len(df_manufacturers)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>Countries</h3>
-            <div class="value">{df_manufacturers['Country'].nunique()}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>UPS Gateways</h3>
-            <div class="value">{len(df_gateways)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        unique_isotopes = set()
-        for isotopes in df_manufacturers["Isotopes"].dropna():
-            for iso in str(isotopes).replace(";", ",").split(","):
-                iso_clean = iso.strip().split()[0]
-                if iso_clean and len(iso_clean) > 1:
-                    unique_isotopes.add(iso_clean)
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>Isotope Types</h3>
-            <div class="value">{len(unique_isotopes)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Map section
-    st.markdown('<p class="section-header">🗺️ Interactive Map - Nuclear Medicine Manufacturing Sites</p>', unsafe_allow_html=True)
-    
-    # Create and display map
-    m, df_filtered = create_map(
-        df_manufacturers, df_gateways,
-        selected_countries, selected_types, selected_isotopes
-    )
-    
-    st.markdown(f"""
-    <div class="info-box">
-        <b>Currently showing:</b> {len(df_filtered)} facilities | 
-        <b>UPS Gateways:</b> CGN (Cologne), VIE (Vienna), BER (Berlin), BCN (Barcelona)
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Display map
-    st_folium(m, width=None, height=550, returned_objects=[])
-    
-    # Data tables section
+    # Details section
     st.markdown("---")
     
-    col_left, col_right = st.columns([2, 1])
+    c1, c2 = st.columns(2)
     
-    with col_left:
-        st.markdown('<p class="section-header">📋 Facility Details</p>', unsafe_allow_html=True)
-        
-        # Display filtered data
-        display_df = df_filtered[["ID", "Facility Name", "Country", "City/Region", 
-                                   "Isotopes", "Half-Lives", "Facility Type"]].copy()
-        
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True,
-            height=400
-        )
+    with c1:
+        st.markdown('<p class="section-title">📍 Sites by Country</p>', unsafe_allow_html=True)
+        country_summary = df_map.groupby('Country').agg({
+            'ID': lambda x: ', '.join(map(str, sorted(x.unique())))
+        }).reset_index()
+        country_summary.columns = ['Country', 'Site IDs']
+        st.dataframe(country_summary, use_container_width=True, hide_index=True, height=220)
     
-    with col_right:
-        st.markdown('<p class="section-header">📊 Distribution by Country</p>', unsafe_allow_html=True)
-        
-        # Country distribution chart
-        country_counts = df_filtered["Country"].value_counts()
-        
-        fig = go.Figure(go.Bar(
-            x=country_counts.values,
-            y=country_counts.index,
-            orientation='h',
-            marker_color='#1B4F72',
-            text=country_counts.values,
-            textposition='outside'
-        ))
-        
-        fig.update_layout(
-            height=400,
-            margin=dict(l=0, r=20, t=10, b=0),
-            xaxis_title="Number of Facilities",
-            yaxis_title="",
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(size=11)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Isotopes reference section
-    with st.expander("📖 Isotope Reference Guide", expanded=False):
-        st.markdown('<p class="section-header">Medical Isotopes Reference</p>', unsafe_allow_html=True)
-        
-        col_iso1, col_iso2 = st.columns(2)
-        
-        with col_iso1:
-            st.markdown("**Diagnostic Isotopes**")
-            diagnostic_iso = df_isotopes[df_isotopes["Primary Use"].str.contains("Diagnostic|PET", na=False)]
-            st.dataframe(diagnostic_iso, use_container_width=True, hide_index=True)
-        
-        with col_iso2:
-            st.markdown("**Therapeutic Isotopes**")
-            therapeutic_iso = df_isotopes[df_isotopes["Primary Use"].str.contains("Therapeutic|Alpha|Pain", na=False)]
-            st.dataframe(therapeutic_iso, use_container_width=True, hide_index=True)
-    
-    # UPS Gateways section
-    with st.expander("✈️ UPS Origin Gateways", expanded=False):
-        st.markdown('<p class="section-header">UPS Origin Gateway Locations (Current and Proposed)</p>', unsafe_allow_html=True)
-        
-        st.dataframe(df_gateways, use_container_width=True, hide_index=True)
-        
-        st.markdown("""
+    with c2:
+        st.markdown('<p class="section-title">✈️ UPS Origin Gateways</p>', unsafe_allow_html=True)
+        st.dataframe(df_gateways[['Code', 'City', 'Country', 'Status']], use_container_width=True, hide_index=True, height=150)
+        st.markdown('''
         <div class="info-box">
-            <b>Gateway Codes:</b><br>
-            • <b>CGN</b> - Cologne, Germany (Current)<br>
-            • <b>VIE</b> - Vienna, Austria (Proposed)<br>
-            • <b>BER</b> - Berlin, Germany (Proposed)<br>
-            • <b>BCN</b> - Barcelona, Spain (Proposed)
+            <b>Gateway Codes:</b> CGN (Cologne) • VIE (Vienna) • BER (Berlin) • BCN (Barcelona)
         </div>
-        """, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
     
-    # Footer
-    st.markdown("""
-    <div class="footer">
-        Nuclear Medicine EMEA Manufacturing Dashboard | Data visualization for executive review
+    st.markdown('''
+    <div class="footer-text">
+        Advanced Therapies Nuclear Medicine Manufacturing and UPS Origin Locations • EMEA Region • CONFIDENTIAL
     </div>
-    """, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

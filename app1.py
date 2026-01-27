@@ -30,7 +30,10 @@ COLORS = {
     'can_serve': '#22A06B',       # Green - can serve (≥6h half-life)
     'cannot_serve': '#DC2626',    # Red - cannot serve (<6h half-life)
     'partial_serve': '#F59E0B',   # Amber - mixed isotopes
-    'gateway_red': '#DC2626',
+    # Gateway status colors
+    'gateway_current': '#22A06B',      # Green - Current/Active
+    'gateway_development': '#F59E0B',  # Yellow/Amber - Development
+    'gateway_requested': '#DC2626',    # Red - Requested
 }
 
 st.markdown("""
@@ -181,17 +184,24 @@ def get_site_serviceability(isotopes):
 def load_data(uploaded_file=None):
     try:
         if uploaded_file is not None:
-            df_map = pd.read_excel(uploaded_file, sheet_name="Manufacturers")
+            df_map = pd.read_excel(uploaded_file, sheet_name="Manufacturers", header=1)
             df_legend = pd.read_excel(uploaded_file, sheet_name="Legend")
             df_gateways = pd.read_excel(uploaded_file, sheet_name="UPS_Gateways")
         else:
             path = Path(__file__).parent / "nm_manufacturers_data.xlsx"
             if path.exists():
-                df_map = pd.read_excel(path, sheet_name="Manufacturers")
+                df_map = pd.read_excel(path, sheet_name="Manufacturers", header=1)
                 df_legend = pd.read_excel(path, sheet_name="Legend")
                 df_gateways = pd.read_excel(path, sheet_name="UPS_Gateways")
             else:
                 return None, None, None
+        
+        # Clean up Manufacturers dataframe - drop empty columns
+        df_map = df_map.dropna(axis=1, how='all')
+        # Ensure correct column names
+        if 'ID' not in df_map.columns:
+            df_map.columns = ['ID', 'Country', 'Latitude', 'Longitude']
+        
         return df_map, df_legend, df_gateways
     except Exception as e:
         st.error(f"Error: {e}")
@@ -258,12 +268,23 @@ def create_popup_html(site_id, description, isotopes, serviceability):
 def create_map(df_map, df_legend, df_gateways):
     m = folium.Map(location=[50.0, 10.0], zoom_start=4, tiles='cartodbpositron')
     
-    # Add UPS Gateways
+    # Add UPS Gateways with status-based coloring
     for _, row in df_gateways.iterrows():
+        status = row.get("Status", "").strip()
+        if status == "Current":
+            gateway_color = COLORS['gateway_current']  # Green
+            status_label = "Current"
+        elif status == "Development":
+            gateway_color = COLORS['gateway_development']  # Yellow
+            status_label = "Development"
+        else:  # Requested or other
+            gateway_color = COLORS['gateway_requested']  # Red
+            status_label = "Requested"
+        
         folium.Circle(
             location=[row["Latitude"], row["Longitude"]],
-            radius=120000, color=COLORS['gateway_red'], weight=3, fill=False, opacity=0.9,
-            tooltip=f"UPS Gateway: {row['Code']} - {row['City']}"
+            radius=120000, color=gateway_color, weight=3, fill=False, opacity=0.9,
+            tooltip=f"UPS Gateway: {row['Code']} - {row['City']} ({status_label})"
         ).add_to(m)
     
     # Create legend lookup
@@ -402,24 +423,40 @@ def main():
     </div>
     ''', unsafe_allow_html=True)
     
-    # Color Legend
+    # Color Legend - Sites
+    st.markdown('''
+    <div style="display:flex;gap:20px;margin-bottom:8px;padding:8px 12px;background:white;border-radius:8px;border:1px solid #E5E8EB;">
+        <div style="font-size:11px;font-weight:600;color:#374151;margin-right:4px;">Sites:</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+            <div style="width:18px;height:14px;background:#22A06B;border-radius:3px;border:2px solid #065F46;"></div>
+            <span><strong>Can Serve</strong> (≥6h)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+            <div style="width:18px;height:14px;background:#F59E0B;border-radius:3px;border:2px solid #92400E;"></div>
+            <span><strong>Partial</strong></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+            <div style="width:18px;height:14px;background:#DC2626;border-radius:3px;border:2px solid #7F1D1D;"></div>
+            <span><strong>Cannot Serve</strong> (<6h)</span>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+    
+    # Color Legend - Gateways
     st.markdown('''
     <div style="display:flex;gap:20px;margin-bottom:12px;padding:8px 12px;background:white;border-radius:8px;border:1px solid #E5E8EB;">
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-            <div style="width:20px;height:16px;background:#22A06B;border-radius:3px;border:2px solid #065F46;"></div>
-            <span><strong>Can Serve</strong> (all isotopes ≥6h)</span>
+        <div style="font-size:11px;font-weight:600;color:#374151;margin-right:4px;">UPS Gateways:</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+            <div style="width:18px;height:18px;border:3px solid #22A06B;border-radius:50%;"></div>
+            <span><strong>Current</strong></span>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-            <div style="width:20px;height:16px;background:#F59E0B;border-radius:3px;border:2px solid #92400E;"></div>
-            <span><strong>Partial</strong> (mixed isotopes)</span>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+            <div style="width:18px;height:18px;border:3px solid #F59E0B;border-radius:50%;"></div>
+            <span><strong>Development</strong></span>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-            <div style="width:20px;height:16px;background:#DC2626;border-radius:3px;border:2px solid #7F1D1D;"></div>
-            <span><strong>Cannot Serve</strong> (all isotopes <6h)</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-            <div style="width:20px;height:20px;border:3px solid #DC2626;border-radius:50%;"></div>
-            <span><strong>UPS Gateway</strong></span>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;">
+            <div style="width:18px;height:18px;border:3px solid #DC2626;border-radius:50%;"></div>
+            <span><strong>Requested</strong></span>
         </div>
     </div>
     ''', unsafe_allow_html=True)
@@ -476,9 +513,22 @@ def main():
     </style>
 </head>
 <body>
-    <div style="background:#FEF2F2;border:2px solid #DC2626;border-radius:6px;padding:8px 10px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-        <div style="width:24px;height:24px;border:3px solid #DC2626;border-radius:50%;flex-shrink:0;"></div>
-        <div style="font-size:11px;color:#1F2937;"><strong style="color:#B91C1C;">UPS Origin Gateways</strong><br><span style="font-size:10px;color:#6B7280;">CGN, VIE, BER, BCN</span></div>
+    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:10px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:600;color:#1B4F72;margin-bottom:8px;">✈️ UPS Origin Gateways</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:18px;height:18px;border:3px solid #22A06B;border-radius:50%;"></div>
+                <span style="font-size:10px;color:#374151;"><strong>Current</strong></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:18px;height:18px;border:3px solid #F59E0B;border-radius:50%;"></div>
+                <span style="font-size:10px;color:#374151;"><strong>Development</strong></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:18px;height:18px;border:3px solid #DC2626;border-radius:50%;"></div>
+                <span style="font-size:10px;color:#374151;"><strong>Requested</strong></span>
+            </div>
+        </div>
     </div>
     <div style="font-weight:600;color:#1B4F72;font-size:12px;margin-bottom:6px;">📍 Manufacturing Sites by Serviceability</div>
     <div style="background:white;border:1px solid #E5E8EB;border-radius:6px;max-height:500px;overflow-y:auto;">
@@ -499,7 +549,7 @@ def main():
     
     with c2:
         st.markdown('<p class="section-hdr">✈️ UPS Origin Gateways</p>', unsafe_allow_html=True)
-        st.dataframe(df_gateways[['Code', 'City', 'Country', 'Status']], use_container_width=True, hide_index=True, height=150)
+        st.dataframe(df_gateways[['Code', 'City', 'Country', 'Status']], use_container_width=True, hide_index=True, height=200)
         
         st.markdown('<p class="section-hdr" style="margin-top:16px;">📊 Isotope Half-Life Reference</p>', unsafe_allow_html=True)
         isotope_ref = []
@@ -512,7 +562,7 @@ def main():
                 display = f"{hours/24:.1f} d"
             can_serve = "✓ Yes" if hours >= SERVICE_THRESHOLD_HOURS else "✗ No"
             isotope_ref.append({'Isotope': name, 'Half-Life': display, 'Serviceable': can_serve})
-        st.dataframe(pd.DataFrame(isotope_ref), use_container_width=True, hide_index=True, height=200)
+        st.dataframe(pd.DataFrame(isotope_ref), use_container_width=True, hide_index=True, height=180)
     
     st.markdown('<div class="info-box"><b>Service Threshold:</b> Marken can serve isotopes with half-life ≥ 6 hours. Isotopes with shorter half-lives (e.g., F-18, Ga-68) require specialized local production and delivery.</div>', unsafe_allow_html=True)
     
